@@ -148,6 +148,8 @@ export namespace ReactNativeFirebase {
      * Make this app unusable and free up resources.
      */
     delete(): Promise<void>;
+
+    utils(): Utils.Module;
   }
 
   export interface Module {
@@ -157,7 +159,7 @@ export namespace ReactNativeFirebase {
      * @param options Options to configure the services used in the App.
      * @param config The optional config for your firebase app
      */
-    initializeApp(options: FirebaseAppOptions, config?: FirebaseAppConfig): FirebaseApp;
+    initializeApp(options: FirebaseAppOptions, config?: FirebaseAppConfig): Promise<FirebaseApp>;
 
     /**
      * Create (and initialize) a FirebaseApp.
@@ -166,7 +168,7 @@ export namespace ReactNativeFirebase {
      * @param name The optional name of the app to initialize ('[DEFAULT]' if
      * omitted)
      */
-    initializeApp(options: FirebaseAppOptions, name?: string): FirebaseApp;
+    initializeApp(options: FirebaseAppOptions, name?: string): Promise<FirebaseApp>;
 
     /**
      * Retrieve an instance of a FirebaseApp.
@@ -189,6 +191,13 @@ export namespace ReactNativeFirebase {
      * The current React Native Firebase version.
      */
     readonly SDK_VERSION: string;
+
+    /**
+     * Utils provides a collection of utilities to aid in using Firebase
+     * and related services inside React Native, e.g. Test Lab helpers
+     * and Google Play Services version helpers.
+     */
+    utils: typeof utils;
   }
 
   /**
@@ -211,6 +220,7 @@ export namespace ReactNativeFirebase {
     private emitter: any;
   }
 
+  // eslint-disable-next-line @typescript-eslint/ban-types
   export type FirebaseModuleWithStatics<M, S = {}> = {
     (): M;
 
@@ -220,6 +230,7 @@ export namespace ReactNativeFirebase {
     readonly SDK_VERSION: string;
   } & S;
 
+  // eslint-disable-next-line @typescript-eslint/ban-types
   export type FirebaseModuleWithStaticsAndApp<M, S = {}> = {
     (app?: FirebaseApp): M;
 
@@ -228,12 +239,6 @@ export namespace ReactNativeFirebase {
      */
     readonly SDK_VERSION: string;
   } & S;
-
-  /**
-   * React Native Firebase `firebase.json` config
-   */
-  // eslint-disable-next-line @typescript-eslint/no-empty-interface
-  export interface FirebaseJsonConfig {}
 }
 
 /*
@@ -278,6 +283,11 @@ export namespace Utils {
      * Returns an absolute path to the users Documents directory.
      *
      * Use this directory to place documents that have been created by the user.
+     *
+     * Normally this is the external files directory on Android but if no external storage directory found,
+     * e.g. removable media has been ejected by the user, it will fall back to internal storage. This may
+     * under rare circumstances where device storage environment changes cause the directory to be different
+     * between runs of the application
      *
      * ```js
      * firebase.utils.FilePath.DOCUMENT_DIRECTORY;
@@ -361,6 +371,92 @@ export namespace Utils {
   }
 
   /**
+   * For further information on the status codes available & what they represent, please head over
+   * to ConnectionResult documentation:
+   * https://developers.google.com/android/reference/com/google/android/gms/common/ConnectionResult
+   */
+  export enum PlayServicesAvailabilityStatusCodes {
+    API_UNAVAILABLE = 16,
+    CANCELED = 13,
+    DEVELOPER_ERROR = 10,
+    DRIVE_EXTERNAL_STORAGE_REQUIRED = 1500,
+    INTERNAL_ERROR = 8,
+    INTERRUPTED = 15,
+    INVALID_ACCOUNT = 5,
+    LICENSE_CHECK_FAILED = 11,
+    NETWORK_ERROR = 7,
+    RESOLUTION_REQUIRED = 6,
+    RESTRICTED_PROFILE = 20,
+    SERVICE_DISABLED = 3,
+    SERVICE_INVALID = 9,
+    SERVICE_MISSING = 1,
+    SERVICE_MISSING_PERMISSION = 19,
+    SERVICE_UPDATING = 18,
+    SERVICE_VERSION_UPDATE_REQUIRED = 2,
+    SIGN_IN_FAILED = 17,
+    SIGN_IN_REQUIRED = 4,
+    SUCCESS = 0,
+    TIMEOUT = 14,
+  }
+
+  export interface PlayServicesAvailability {
+    /**
+     * Returns a numeric status code. Please refer to Android documentation
+     * for further information:
+     * https://developers.google.com/android/reference/com/google/android/gms/common/ConnectionResult
+     *
+     * ```js
+     * firebase.utils().playServicesAvailability.status;
+     * ```
+     *
+     * @android Android only - iOS returns 0
+     */
+    status: PlayServicesAvailabilityStatusCodes;
+
+    /**
+     * Returns a boolean indicating whether Play Store is available on the device
+     *
+     * ```js
+     * firebase.utils().playServicesAvailability.isAvailable;
+     * ```
+     *
+     * @android Android only - iOS returns true
+     */
+    isAvailable: boolean;
+
+    /**
+     * If Play Services is not available on the device, hasResolution indicates
+     * whether it is possible to do something about it (e.g. install Play Services).
+     *
+     * ```js
+     * firebase.utils().playServicesAvailability.hasResolution;
+     * ```
+     * @android Android only - iOS returns undefined
+     */
+    hasResolution: boolean | undefined;
+
+    /**
+     * If an error was received, this indicates whether the error is resolvable
+     *
+     * ```js
+     * firebase.utils().playServicesAvailability.isUserResolvableError;
+     * ```
+     * @android Android only - iOS returns undefined
+     */
+    isUserResolvableError: boolean | undefined;
+
+    /**
+     * A human readable error string
+     *
+     * ```js
+     * firebase.utils().playServicesAvailability.error;
+     * ```
+     * @android Android only - iOS returns undefined
+     */
+    error: string | undefined;
+  }
+
+  /**
    * The React Native Firebase Utils service interface.
    *
    * > This module is available for the default app only.
@@ -375,45 +471,85 @@ export namespace Utils {
    */
   export class Module extends FirebaseModule {
     /**
-     * Returns true if this app is running inside a Firebase Test Lab environment. Always returns false on iOS.
+     * Returns true if this app is running inside a Firebase Test Lab environment.
      *
-     * @android
+     * #### Example
+     *
+     * ```js
+     * const isRunningInTestLab = await firebase.utils().isRunningInTestLab;
+     * ```
+     * @android Android only - iOS returns false
      */
     isRunningInTestLab: boolean;
+    /**
+     * Returns PlayServicesAvailability properties
+     *
+     * #### Example
+     *
+     * ```js
+     * const PlayServicesAvailability = await firebase.utils().playServicesAvailability;
+     * ```
+     *
+     * @android Android only - iOS always returns { isAvailable: true, status: 0 }
+     */
+    playServicesAvailability: PlayServicesAvailability;
+
+    /**
+     * Returns PlayServicesAvailability properties
+     *
+     * #### Example
+     *
+     * ```js
+     * const PlayServicesAvailability = await firebase.utils().getPlayServicesStatus();
+     * ```
+     *
+     * @android Android only - iOS always returns { isAvailable: true, status: 0 }
+     */
+    getPlayServicesStatus(): Promise<PlayServicesAvailability>;
+
+    /**
+     * A prompt appears on the device to ask the user to update play services
+     *
+     * #### Example
+     *
+     * ```js
+     * await firebase.utils().promptForPlayServices();
+     * ```
+     *
+     * @android Android only - iOS returns undefined
+     */
+    promptForPlayServices(): Promise<void>;
+    /**
+     * Attempts to make Google Play services available on this device
+     *
+     * #### Example
+     *
+     * ```js
+     * await firebase.utils().makePlayServicesAvailable();
+     * ```
+     *
+     * @android Android only - iOS returns undefined
+     */
+    makePlayServicesAvailable(): Promise<void>;
+    /**
+     * Resolves an error by starting any intents requiring user interaction.
+     *
+     * #### Example
+     *
+     * ```js
+     * await firebase.utils().resolutionForPlayServices();
+     * ```
+     *
+     * @android Android only - iOS returns undefined
+     */
+    resolutionForPlayServices(): Promise<void>;
   }
 }
 
-declare module '@react-native-firebase/app' {
-  /**
-   * Add Utils module as a named export for `app`.
-   */
-  export const utils: ReactNativeFirebase.FirebaseModuleWithStatics<Utils.Module, Utils.Statics>;
+/**
+ * Add Utils module as a named export for `app`.
+ */
+export const utils: ReactNativeFirebase.FirebaseModuleWithStatics<Utils.Module, Utils.Statics>;
 
-  /**
-   * Default Firebase export.
-   */
-  const module: {} & ReactNativeFirebase.Module;
-  export default module;
-}
-
-declare module '@react-native-firebase/app' {
-  /**
-   * Attach Utils namespace to `firebase.` and `FirebaseApp.`.
-   */
-  namespace ReactNativeFirebase {
-    import FirebaseModuleWithStatics = ReactNativeFirebase.FirebaseModuleWithStatics;
-
-    interface Module {
-      /**
-       * Utils provides a collection of utilities to aid in using Firebase
-       * and related services inside React Native, e.g. Test Lab helpers
-       * and Google Play Services version helpers.
-       */
-      utils: FirebaseModuleWithStatics<Utils.Module, Utils.Statics>;
-    }
-
-    interface FirebaseApp {
-      utils(): Utils.Module;
-    }
-  }
-}
+declare const module: ReactNativeFirebase.Module;
+export default module;
