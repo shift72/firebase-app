@@ -14,6 +14,9 @@
  * limitations under the License.
  *
  */
+
 #import "RCTVersion.h"
+
 // generated file - do not modify or commit
-NSString* const RNFBVersionString = @"11.4.1";
+NSString* const RNFBVersionString = @"17.5.0";
+

@@ -1,3 +1,4 @@
+
 package io.invertase.firebase.app;
 /*
  * Copyright (c) 2016-present Invertase Limited & Contributors
@@ -17,5 +18,5 @@ package io.invertase.firebase.app;
  */
 // generated file - do not modify or commit
 public class ReactNativeFirebaseVersion {
-  public static String VERSION = "11.4.1";
+  public static String VERSION = "17.5.0";
 }
